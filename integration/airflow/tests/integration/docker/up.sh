@@ -30,6 +30,8 @@ if [[ ! -f gcloud/gcloud-service-key.json ]]; then
 fi
 echo $GCLOUD_SERVICE_KEY > gcloud/gcloud-service-key.json
 chmod 644 gcloud/gcloud-service-key.json
+mkdir -p airflow/logs
+chmod a+rwx -R airflow/logs
 
 # maybe overkill
 OPENLINEAGE_AIRFLOW_WHL=$(docker run openlineage-airflow-base:latest sh -c "ls /whl/openlineage*")
@@ -37,6 +39,8 @@ OPENLINEAGE_AIRFLOW_WHL_ALL=$(docker run openlineage-airflow-base:latest sh -c "
 
 # Add revision to requirements.txt
 cat > requirements.txt <<EOL
+apache-airflow[celery]==1.10.12
+great_expectations==0.13.34
 airflow-provider-great-expectations==0.0.8
 dbt-bigquery==0.20.1
 ${OPENLINEAGE_AIRFLOW_WHL}
@@ -52,4 +56,5 @@ retrying==1.3.3
 pytest==6.2.2
 EOL
 
-docker-compose up --build --force-recreate --exit-code-from integration
+docker-compose up --build --abort-on-container-exit airflow_init postgres
+docker-compose up --build --exit-code-from integration --scale airflow_init=0
