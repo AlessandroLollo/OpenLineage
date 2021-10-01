@@ -122,7 +122,7 @@ jobs:
       - run: |
           cd ../../client/java
           ./gradlew  --no-daemon publishToMavenLocal
-          cd - 
+          cd -
           # Get, then decode the GPG private key used to sign *.jar
           export ORG_GRADLE_PROJECT_signingKey=$(echo $GPG_SIGNING_KEY | base64 -d)
           export RELEASE_PASSWORD=$(echo $SONATYPE_PASSWORD)
@@ -310,6 +310,18 @@ jobs:
       - run: pip install wheel twine
       - run: python -m twine upload --non-interactive --verbose --repository pypi dist/*
 
+  publish-spec:
+    working_directory: ~/openlineage
+    docker:
+      - image: cimg/base:2021.07
+    steps:
+      - *checkout_project_root
+      - add_ssh_keys:
+          fingerprints:
+            - "SO:ME:FIN:G:ER:PR:IN:T"
+      - run: spec/release.sh
+
+
 workflows:
   openlineage:
     jobs:
@@ -366,6 +378,9 @@ workflows:
             - build-integration-common
             - build-integration-airflow
             - build-integration-dbt
+      - publish-spec:
+          <<: *only_on_main
+          context: release
   release:
     jobs:
       - release-client-java:
