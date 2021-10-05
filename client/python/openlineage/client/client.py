@@ -34,12 +34,17 @@ class OpenLineageClientOptions:
 log = logging.getLogger(__name__)
 
 
-class OpenLineageClient:
+class BaseTransport:
+    def send(self, event: RunEvent):
+        raise NotImplementedError()
+
+
+class HttpTransport(BaseTransport):
     def __init__(
-            self,
-            url: str,
-            options: OpenLineageClientOptions = OpenLineageClientOptions(),
-            session: Session = None
+        self,
+        url: str,
+        options: OpenLineageClientOptions = OpenLineageClientOptions(),
+        session: Session = None
     ):
         parsed = urlparse(url)
         if not (parsed.scheme and parsed.netloc):
@@ -48,13 +53,12 @@ class OpenLineageClient:
         self.options = options
         self.session = session if session else Session()
         self.session.headers['Content-Type'] = 'application/json'
-
         if self.options.api_key:
             self._add_auth(options.api_key)
         if self.options.adapter:
             self.session.mount(self.url, options.adapter)
 
-    def emit(self, event: RunEvent):
+    def send(self, event: RunEvent):
         data = Serde.to_json(event)
         if log.isEnabledFor(logging.DEBUG):
             log.debug(f"Sending openlineage event {event}")
@@ -72,15 +76,52 @@ class OpenLineageClient:
             "Authorization": f"Bearer {api_key}"
         })
 
+
+class OpenLineageClient:
+    def __init__(
+        self,
+        url: str = None,
+        options: OpenLineageClientOptions = OpenLineageClientOptions(),
+        session: Session = None,
+        transport: BaseTransport = None
+    ):
+        """
+        Create OpenLineageClient from provided transport. If url is passed, for back compatibility
+        construct HttpTransport.
+        """
+        if url:
+            if transport:
+                raise RuntimeError(
+                    "can't pass url and transport to OpenLineageClient at the same time"
+                )
+            self.transport = HttpTransport(
+                url=url,
+                options=options,
+                session=session
+            )
+        elif transport:
+            self.transport = transport
+        else:
+            raise ValueError("Transport not passed to OpenLineageClient")
+
+    def emit(self, event: RunEvent):
+        return self.transport.send(event)
+
     @classmethod
     def from_environment(cls):
-        server_url = os.getenv("OPENLINEAGE_URL", constants.DEFAULT_OPENLINEAGE_URL)
-        if server_url:
-            log.info(f"Constructing openlineage client to send events to {server_url}")
-        return OpenLineageClient(
-            url=server_url,
-            options=OpenLineageClientOptions(
-                timeout=constants.DEFAULT_TIMEOUT_MS / 1000,
-                api_key=os.getenv("OPENLINEAGE_API_KEY", None)
+        transport = os.getenv("OPENLINEAGE_TRANSPORT", constants.DEFAULT_OPENLINEAGE_TRANSPORT)
+
+        if transport == "http":
+            server_url = os.getenv("OPENLINEAGE_URL", constants.DEFAULT_OPENLINEAGE_URL)
+            if server_url:
+                log.info(f"Constructing openlineage client to send events to {server_url}")
+            return OpenLineageClient(
+                transport=HttpTransport(
+                    url=server_url,
+                    options=OpenLineageClientOptions(
+                        timeout=constants.DEFAULT_TIMEOUT_MS / 1000,
+                        api_key=os.getenv("OPENLINEAGE_API_KEY", None)
+                    )
+                )
             )
-        )
+        raise ValueError(f"transport {transport} not implemented")
