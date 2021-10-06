@@ -1,3 +1,4 @@
+from airflow.models import BaseOperator
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.utils.dates import days_ago
 
@@ -28,6 +29,20 @@ dag = DAG(
     description='Determines the popular day of week orders are placed.'
 )
 
+
+class CustomOperator(BaseOperator):
+    def execute(self, context):
+        self.log.info("CUSTOM OPERATOR")
+
+    def post_execute(self, context, result=None):
+        self.log.info(f"POST EXECUTE")
+
+
+t0 = CustomOperator(
+    task_id="elo120",
+    dag=dag
+)
+
 t1 = PostgresOperator(
     task_id='postgres_if_not_exists',
     postgres_conn_id='food_delivery_db',
@@ -54,4 +69,4 @@ t2 = PostgresOperator(
     dag=dag
 )
 
-t1 >> t2
+t0 >> t1 >> t2

@@ -54,4 +54,5 @@ retrying==1.3.3
 pytest==6.2.2
 EOL
 
+docker-compose down
 docker-compose up --build --force-recreate --exit-code-from integration
